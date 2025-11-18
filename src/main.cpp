@@ -146,6 +146,10 @@ int main()
     // get uniform location for offset
     int locOffset = glGetUniformLocation(shaderProgram, "uOffset");
 
+    // visibility and mouse state
+    bool visible = true;
+    bool prevMousePressed = false;
+
     // render loop
     while (!glfwWindowShouldClose(window))
     {
@@ -157,17 +161,41 @@ int main()
         float ox = std::sin(t * 1.0f) * 0.6f; // horizontal oscillation
         float oy = std::cos(t * 0.7f) * 0.3f; // vertical oscillation
 
+        // mouse click handling (rising edge)
+        int leftState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
+        bool mousePressed = (leftState == GLFW_PRESS);
+        if (mousePressed && !prevMousePressed)
+        {
+            double cx, cy;
+            glfwGetCursorPos(window, &cx, &cy);
+            int w, h;
+            glfwGetWindowSize(window, &w, &h);
+            float nx = (float)(cx / w) * 2.0f - 1.0f;
+            float ny = -((float)(cy / h) * 2.0f - 1.0f);
+            // transform into shape local space (shape centered at ox,oy with half-size 0.5)
+            float localX = nx - ox;
+            float localY = ny - oy;
+            if (visible && localX >= -0.5f && localX <= 0.5f && localY >= -0.5f && localY <= 0.5f)
+            {
+                visible = false;
+            }
+        }
+        prevMousePressed = mousePressed;
+
         // rendering commands here
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-		// draw our colorful rectangle
-        glUseProgram(shaderProgram);
-        // set offset uniform
-        glUniform2f(locOffset, ox, oy);
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+		// draw our colorful rectangle if visible
+        if (visible)
+        {
+            glUseProgram(shaderProgram);
+            // set offset uniform
+            glUniform2f(locOffset, ox, oy);
+            glBindVertexArray(VAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
         
         // check and call events and swap the buffers
         glfwPollEvents();
