@@ -1,7 +1,10 @@
-#include <glad/glad.h> 
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <cmath>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -20,11 +23,12 @@ const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
 "layout (location = 1) in vec3 aColor;\n"
 "out vec3 ourColor;\n"
-"uniform vec2 uOffset;\n"
+"uniform mat4 model;\n"
+"uniform mat4 view;\n"
+"uniform mat4 projection;\n"
 "void main()\n"
 "{\n"
-"    vec2 pos = aPos.xy + uOffset;\n"
-"    gl_Position = vec4(pos, aPos.z, 1.0);\n"
+"    gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
 "    ourColor = aColor;\n"
 "}\0";
 
@@ -43,8 +47,8 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    
-    
+
+
 
     // Création de la fenêtre
     GLFWwindow* window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
@@ -65,12 +69,13 @@ int main()
         return -1;
     }
 
-	// Configuration du viewport et du callback pour le redimensionnement
+    // Configuration du viewport et du callback pour le redimensionnement
     glViewport(0, 0, 800, 600);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glEnable(GL_DEPTH_TEST);
 
 
-    
+
     // build and compile our shader program
     // Vertex Shader
     unsigned int vertexShader;
@@ -110,24 +115,45 @@ int main()
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     float vertices[] = {
-        // pos(x,y,z)   // color(r,g,b)
-        -0.5f,  0.5f, 0.0f,  0.0f,0.0f,1.0f, // top-left blue
-         0.5f,  0.5f, 0.0f,  1.0f,0.0f,0.0f, // top-right red
-         0.5f, -0.5f, 0.0f,  1.0f,1.0f,0.0f, // bottom-right yellow
-        -0.5f, -0.5f, 0.0f,  0.0f,1.0f,0.0f  // bottom-left green
+        // pos(x,y,z)      // color(r,g,b)
+        // Face avant
+        -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 0.0f,
+        // Face arrière
+        -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 0.0f,
     };
-
     unsigned int indices[] = {
-    0, 1, 3,   // first triangle
-    1, 2, 3    // second triangle
+        // Face avant
+        0, 1, 2,
+        2, 3, 0,
+        // Face arrière
+        4, 5, 6,
+        6, 7, 4,
+        // Face gauche
+        4, 0, 3,
+        3, 7, 4,
+        // Face droite
+        1, 5, 6,
+        6, 2, 1,
+        // Face bas
+        4, 5, 1,
+        1, 0, 4,
+        // Face haut
+        3, 2, 6,
+        6, 7, 3,
     };
 
-	// Vertex Buffer Object and Vertex Array Object and Element Buffer Object
+    // Vertex Buffer Object and Vertex Array Object and Element Buffer Object
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
-    
+
     // 1. bind Vertex Array Object
     glBindVertexArray(VAO);
     // 2. copy our vertices array in a vertex buffer for OpenGL to use
@@ -143,8 +169,10 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // get uniform location for offset
-    int locOffset = glGetUniformLocation(shaderProgram, "uOffset");
+    // get uniform location for model, view, projection
+    unsigned int locModel = glGetUniformLocation(shaderProgram, "model");
+    unsigned int locView = glGetUniformLocation(shaderProgram, "view");
+    unsigned int locProjection = glGetUniformLocation(shaderProgram, "projection");
 
     // visibility and mouse state
     bool visible = true;
@@ -156,10 +184,13 @@ int main()
         // input
         processInput(window);
 
-        // compute offset based on time to animate the shape
-        float t = (float)glfwGetTime();
-        float ox = std::sin(t * 1.0f) * 0.6f; // horizontal oscillation
-        float oy = std::cos(t * 0.7f) * 0.3f; // vertical oscillation
+        // compute model, view, projection matrices
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 projection = glm::mat4(1.0f);
+        model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
+        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+        projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 
         // mouse click handling (rising edge)
         int leftState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
@@ -172,10 +203,17 @@ int main()
             glfwGetWindowSize(window, &w, &h);
             float nx = (float)(cx / w) * 2.0f - 1.0f;
             float ny = -((float)(cy / h) * 2.0f - 1.0f);
-            // transform into shape local space (shape centered at ox,oy with half-size 0.5)
-            float localX = nx - ox;
-            float localY = ny - oy;
-            if (visible && localX >= -0.5f && localX <= 0.5f && localY >= -0.5f && localY <= 0.5f)
+            // transform into shape local space (shape centered at model position)
+            glm::mat4 mvp = projection * view * model;
+            glm::vec4 clipSpace = glm::vec4(nx, ny, -1.0f, 1.0f);
+            glm::vec4 eyeSpace = glm::inverse(projection) * clipSpace;
+            eyeSpace = glm::vec4(eyeSpace.x, eyeSpace.y, -1.0f, 0.0f);
+            glm::vec4 worldSpace = glm::inverse(view) * eyeSpace;
+            glm::vec4 localSpace = glm::inverse(model) * worldSpace;
+            // Simple bounding box check (approximate)
+            if (visible && localSpace.x >= -0.5f && localSpace.x <= 0.5f &&
+                localSpace.y >= -0.5f && localSpace.y <= 0.5f &&
+                localSpace.z >= -0.5f && localSpace.z <= 0.5f)
             {
                 visible = false;
             }
@@ -184,31 +222,32 @@ int main()
 
         // rendering commands here
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// draw our colorful rectangle if visible
+        // draw our colorful cube if visible
         if (visible)
         {
             glUseProgram(shaderProgram);
-            // set offset uniform
-            glUniform2f(locOffset, ox, oy);
+            glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniformMatrix4fv(locView, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(locProjection, 1, GL_FALSE, glm::value_ptr(projection));
             glBindVertexArray(VAO);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
             glBindVertexArray(0);
         }
-        
+
         // check and call events and swap the buffers
         glfwPollEvents();
         glfwSwapBuffers(window);
     }
 
-	// Libération des ressources
+    // Libération des ressources
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
     glDeleteProgram(shaderProgram);
 
-	// Nettoyage et fermeture
+    // Nettoyage et fermeture
     glfwTerminate();
     return 0;
 
