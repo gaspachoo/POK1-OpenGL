@@ -174,9 +174,17 @@ int main()
     unsigned int locView = glGetUniformLocation(shaderProgram, "view");
     unsigned int locProjection = glGetUniformLocation(shaderProgram, "projection");
 
+    // cube position and speed
+    glm::vec3 cubePos = glm::vec3(0.0f);
+    glm::vec3 cubeVel = glm::vec3(1.0f, 0.5f, 0.0f);
+
     // visibility and mouse state
     bool visible = true;
     bool prevMousePressed = false;
+
+    // delta time variables
+    double lastTime = glfwGetTime();
+    float deltaTime = 0.0f;
 
     // render loop
     while (!glfwWindowShouldClose(window))
@@ -184,10 +192,27 @@ int main()
         // input
         processInput(window);
 
+        // compute delta time
+        double currentTime = glfwGetTime();
+        deltaTime = static_cast<float>(currentTime - lastTime);
+        lastTime = currentTime;
+
+        // update cube position
+        cubePos += cubeVel * deltaTime;
+
+        // bounce within bounds
+        if (cubePos.x <= -1.0f || cubePos.x >= 1.0f)
+            cubeVel.x = -cubeVel.x;
+        if (cubePos.y <= -1.0f || cubePos.y >= 1.0f)
+            cubeVel.y = -cubeVel.y;
+        if (cubePos.z <= -1.0f || cubePos.z >= 1.0f)
+            cubeVel.z = -cubeVel.z;
+
         // compute model, view, projection matrices
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = glm::mat4(1.0f);
         glm::mat4 projection = glm::mat4(1.0f);
+        model = glm::translate(model, cubePos);
         model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
         view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
         projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
