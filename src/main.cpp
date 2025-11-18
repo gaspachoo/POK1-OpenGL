@@ -1,6 +1,7 @@
 #include <glad/glad.h> 
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <cmath>
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -19,9 +20,11 @@ const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
 "layout (location = 1) in vec3 aColor;\n"
 "out vec3 ourColor;\n"
+"uniform vec2 uOffset;\n"
 "void main()\n"
 "{\n"
-"    gl_Position = vec4(aPos, 1.0);\n"
+"    vec2 pos = aPos.xy + uOffset;\n"
+"    gl_Position = vec4(pos, aPos.z, 1.0);\n"
 "    ourColor = aColor;\n"
 "}\0";
 
@@ -140,6 +143,8 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+    // get uniform location for offset
+    int locOffset = glGetUniformLocation(shaderProgram, "uOffset");
 
     // render loop
     while (!glfwWindowShouldClose(window))
@@ -147,12 +152,19 @@ int main()
         // input
         processInput(window);
 
+        // compute offset based on time to animate the shape
+        float t = (float)glfwGetTime();
+        float ox = std::sin(t * 1.0f) * 0.6f; // horizontal oscillation
+        float oy = std::cos(t * 0.7f) * 0.3f; // vertical oscillation
+
         // rendering commands here
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
 		// draw our colorful rectangle
         glUseProgram(shaderProgram);
+        // set offset uniform
+        glUniform2f(locOffset, ox, oy);
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
